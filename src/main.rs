@@ -1,30 +1,59 @@
 use async_std::io;
 use env_logger::{Builder, Env};
 use futures::{prelude::*, select};
+use libp2p::core::muxing::StreamMuxerBox;
+use libp2p::core::transport::{self, upgrade};
+use libp2p::core::upgrade::Version;
 use libp2p::gossipsub::MessageId;
 use libp2p::gossipsub::{
     GossipsubEvent, GossipsubMessage, IdentTopic as Topic, MessageAuthenticity, ValidationMode,
 };
+use libp2p::pnet::PnetConfig;
+use libp2p::yamux::YamuxConfig;
+use libp2p::{mplex, noise, Transport};
+use libp2p::noise::{X25519Spec, Keypair, NoiseConfig};
+use libp2p::tcp::TcpConfig;
 use libp2p::{gossipsub, identity, swarm::SwarmEvent, Multiaddr, PeerId};
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
-#[async_std::main]
+
+pub fn build_transport(
+    key_pair: identity::Keypair,
+) -> transport::Boxed<(PeerId, StreamMuxerBox)> {
+    let auth_keys = Keypair::<X25519Spec>::new()
+        .into_authentic(&key_pair)
+        .unwrap();
+
+    let transp = TcpConfig::new().nodelay(true);
+    let noise_config = noise::NoiseConfig::xx(auth_keys).into_authenticated();
+    let yamux_config = YamuxConfig::default();
+        
+    transp
+            .upgrade(Version::V1)
+            .authenticate(noise_config)
+            .multiplex(yamux_config)
+            .timeout(Duration::from_secs(20))
+            .boxed()
+
+}
+
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     Builder::from_env(Env::default().default_filter_or("info")).init();
 
     // Create a random PeerId
     let local_key = identity::Keypair::generate_ed25519();
+
     let local_peer_id = PeerId::from(local_key.public());
     println!("Local peer id: {:?}", local_peer_id);
 
     // Set up an encrypted TCP Transport over the Mplex and Yamux protocols
-    let transport = libp2p::development_transport(local_key.clone()).await?;
-
+    let transport = build_transport(local_key.clone());
     // Create a Gossipsub topic
-    let topic = Topic::new("test-net");
+    let topic = Topic::new("test");
 
     // Create a Swarm to manage peers and events
     let mut swarm = {
@@ -105,6 +134,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 ),
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {:?}", address);
+                }
+                SwarmEvent::ConnectionEstablished {endpoint, ..} => {
+                    println!("Connected to peer on {:?}", endpoint)
+                }
+                SwarmEvent::IncomingConnection {local_addr, send_back_addr} => {
+                    println!("Incoming Connection on {:?} to {:?}", local_addr, send_back_addr)
                 }
                 _ => {}
             }
