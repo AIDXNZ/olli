@@ -108,13 +108,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .arg(
             Arg::new("connect")
                 .help("Connect to peer with provided Address")
-                .long("connect")
-                .required(false),
-        )
-        .arg(
-            Arg::new("topic")
-                .help("Topic to subscribe to over GossipSub")
-                .required(false),
+                .required(true),
         )
         .get_matches();
 

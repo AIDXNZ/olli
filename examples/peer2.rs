@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut stdin = io::BufReader::new(io::stdin()).lines().fuse();
 
     // Kick it off
-    loop {
+    loop { 
         select! {
             line = stdin.select_next_some() => {
                 let addr: Multiaddr = line.unwrap().parse().expect("User Provided Addr");
