@@ -44,7 +44,7 @@ pub fn build_transport(key_pair: identity::Keypair) -> transport::Boxed<(PeerId,
         .upgrade(Version::V1)
         .authenticate(noise_config)
         .multiplex(yamux_config)
-        .timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(10))
         .boxed()
 }
 
@@ -156,9 +156,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             //relay_client: client,
         };
 
-        SwarmBuilder::new(transport, behaviour, local_peer_id)
-            .executor(Box::new(|fut| block_on(fut)))
-            .build()
+        Swarm::new(transport, behaviour, local_peer_id)
     };
 
     // Listen on all interfaces and whatever port the OS assigns
@@ -191,6 +189,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             event = swarm.select_next_some() => match event {
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {:?}", address);
+                }
+                SwarmEvent::Dialing(local_peer_id) => {
+                    println!("Dialiang Peer: {:?}", local_peer_id)
                 }
                 SwarmEvent::ConnectionEstablished {endpoint, ..} => {
                     println!("Connected to peer on {:?}", endpoint)
